@@ -1,0 +1,105 @@
+name: skein
+
+volumes:
+  ollama-models:
+  grafana-data:
+  prometheus-data:
+
+services:
+
+  skein:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: skein
+    ports:
+      - "8000:8000"
+    environment:
+      SKEIN_OLLAMA_URL: http://ollama:11434
+      SKEIN_OLLAMA_MODEL: llama3.2:3b
+      SKEIN_GLOBAL_CONCURRENCY: "64"
+      SKEIN_TOOL_CONCURRENCY: "8"
+      SKEIN_QUEUE_SIZE: "128"
+      SKEIN_WORKERS: "8"
+      SKEIN_OVERFLOW_POLICY: reject
+      SKEIN_TRACE_DIR: /app/traces
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      # Longer than the drain window in the app, so the container is not killed
+      # partway through cancellation cleanup.
+      SKEIN_DRAIN_TIMEOUT_S: "25"
+    volumes:
+      - ../traces:/app/traces
+    # Compose's own grace period, matching the k8s terminationGracePeriodSeconds.
+    stop_grace_period: 40s
+    depends_on:
+      ollama:
+        condition: service_started
+      jaeger:
+        condition: service_started
+    healthcheck:
+      # /healthz, not /readyz. Readiness deliberately reports false while
+      # draining, and a healthcheck on it would mark a correctly-draining
+      # container unhealthy and restart it mid-shutdown.
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/healthz', timeout=3).status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  ollama:
+    image: ollama/ollama:0.4.7
+    container_name: skein-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    # The model is NOT pulled automatically. A multi-gigabyte download inside a
+    # healthcheck makes `docker compose up` appear to hang; see the README for
+    # the one-line pull.
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    container_name: skein-jaeger
+    ports:
+      - "16686:16686"   # UI
+      - "4317:4317"     # OTLP gRPC
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: skein-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=6h
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    container_name: skein-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      # Anonymous admin access. Local-only stack; a login prompt between the
+      # developer and the dashboard is friction with no security value here.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_DEFAULT_THEME: dark
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus

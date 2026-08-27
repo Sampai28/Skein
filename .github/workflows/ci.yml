@@ -1,0 +1,82 @@
+name: ci
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: lint, typecheck, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # 3.12 to match the container. Running CI on a version the service
+          # never runs on tests a configuration nobody deploys.
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check src tests
+
+      - name: Format check
+        run: ruff format --check src tests
+
+      - name: Typecheck
+        run: mypy
+
+      - name: Test
+        # -p no:randomly so the property tests get a stable ordering; the
+        # asyncio tests already isolate their own event loops per test.
+        run: pytest -q --cov=skein --cov-report=term-missing
+
+      - name: Detect leaked tasks in the suite output
+        # The conftest fixture fails the individual test, but this makes a leak
+        # impossible to miss in the job summary.
+        if: always()
+        run: |
+          if grep -q "task(s) leaked" pytest.log 2>/dev/null; then
+            echo "::error::asyncio tasks leaked during the test run"
+            exit 1
+          fi
+
+  build:
+    name: docker build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: check
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the runtime image
+        run: docker build -f docker/Dockerfile -t skein:ci .
+
+      - name: Validate the example workflow inside the image
+        # Exercises the model and the validator against the shipped example,
+        # which catches an example that drifted from the schema.
+        run: docker run --rm skein:ci python -m skein.cli validate examples/research.yaml
+
+      - name: Validate the Kubernetes manifests
+        run: |
+          curl -sSLo /tmp/kubeconform.tar.gz \
+            https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
+          tar -xzf /tmp/kubeconform.tar.gz -C /tmp
+          /tmp/kubeconform -strict -summary k8s/*.yaml

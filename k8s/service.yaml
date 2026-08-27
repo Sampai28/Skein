@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: skein
+  labels:
+    app.kubernetes.io/name: skein
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: skein
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP
+
+  # A WebSocket connection is long-lived and stateful, and the run it is
+  # streaming lives in one pod's memory. Session affinity keeps a client's
+  # follow-up requests on the pod that owns its run — without it, a GET /runs/{id}
+  # after a POST /workflows can land on a replica that has never heard of it.
+  #
+  # This is a workaround for the in-memory run store, not a design goal. A
+  # shared store would remove the need.
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600

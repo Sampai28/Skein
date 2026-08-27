@@ -1,0 +1,35 @@
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: skein
+
+servers: 1
+# Two agents so a rolling update with maxUnavailable: 0 has somewhere to place
+# the surge pod. On a single node it would still work, but pod anti-affinity or
+# a resource-constrained node would stall the roll.
+agents: 2
+
+image: rancher/k3s:v1.31.2-k3s1
+
+ports:
+  - port: 8080:80
+    nodeFilters:
+      - loadbalancer
+
+options:
+  k3d:
+    wait: true
+    timeout: "120s"
+  k3s:
+    nodeLabels:
+      - label: skein.dev/role=workload
+        nodeFilters:
+          - agent:*
+
+registries:
+  # A local registry avoids `k3d image import` on every build, which re-uploads
+  # the whole image each time rather than just the changed layers.
+  create:
+    name: skein-registry
+    host: "0.0.0.0"
+    hostPort: "5001"

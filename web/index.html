@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Skein — DAG viewer</title>
+  <!-- No build step, no framework, no package.json. This page exists so the
+       scheduler's behaviour is visible in a browser within seconds of the stack
+       coming up; a toolchain would defeat that. -->
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<header>
+  <h1>Skein</h1>
+  <form id="lookup">
+    <input id="run-id" type="text" placeholder="run id" spellcheck="false" autocomplete="off" required>
+    <button type="submit">Watch</button>
+    <button type="button" id="cancel-btn" class="danger" disabled>Cancel run</button>
+  </form>
+  <p id="status" class="status" role="status" aria-live="polite">Enter a run id.</p>
+</header>
+
+<main>
+  <section class="summary card hidden" id="summary">
+    <div class="summary-head">
+      <span id="run-status" class="pill">—</span>
+      <span id="run-name" class="muted">—</span>
+    </div>
+    <ul class="legend">
+      <li><i class="dot pending"></i>pending</li>
+      <li><i class="dot running"></i>running</li>
+      <li><i class="dot succeeded"></i>succeeded</li>
+      <li><i class="dot failed"></i>failed</li>
+      <li><i class="dot cancelled"></i>cancelled</li>
+      <li><i class="dot skipped"></i>skipped</li>
+    </ul>
+  </section>
+
+  <section class="card hidden" id="graph-card">
+    <h2>Graph</h2>
+    <!-- Laid out by longest-path depth, drawn as SVG. Deliberately not a graph
+         library: the DAGs here are small, and the layout below is about thirty
+         lines. -->
+    <div id="graph-wrap"><svg id="graph" xmlns="http://www.w3.org/2000/svg"></svg></div>
+  </section>
+
+  <section class="card hidden" id="events-card">
+    <h2>Events</h2>
+    <div id="events" class="events"></div>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,165 @@
+{
+  "uid": "skein-runtime",
+  "title": "Skein runtime",
+  "tags": ["skein", "asyncio"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "In-flight steps vs limit",
+      "description": "The concurrency cap is only meaningful if the observed value approaches it. A flat line well below the limit means the limit is not binding and the bottleneck is elsewhere.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "custom": { "fillOpacity": 10, "lineWidth": 2 } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "limit" },
+            "properties": [
+              { "id": "custom.lineStyle", "value": { "dash": [8, 4], "fill": "dash" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        { "expr": "skein_inflight_steps", "legendFormat": "in-flight {{scope}}", "refId": "A" },
+        { "expr": "skein_concurrency_limit", "legendFormat": "limit", "refId": "B" },
+        { "expr": "skein_concurrency_peak", "legendFormat": "peak {{scope}}", "refId": "C" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Ingress queue depth and rejections",
+      "description": "Depth climbing toward capacity is backpressure working. A non-zero rejection rate means the caller is being told to slow down.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        { "expr": "skein_queue_depth", "legendFormat": "depth", "refId": "A" },
+        { "expr": "skein_queue_capacity", "legendFormat": "capacity", "refId": "B" },
+        { "expr": "rate(skein_queue_rejections_total[1m])", "legendFormat": "rejections/s", "refId": "C" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Step latency by tool (p50 / p95 / p99)",
+      "description": "Computed from the histogram. p99 diverging from p50 is the long tail that step timeouts exist to bound.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(skein_step_duration_seconds_bucket[5m])) by (le, tool))",
+          "legendFormat": "p50 {{tool}}", "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(skein_step_duration_seconds_bucket[5m])) by (le, tool))",
+          "legendFormat": "p95 {{tool}}", "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(skein_step_duration_seconds_bucket[5m])) by (le, tool))",
+          "legendFormat": "p99 {{tool}}", "refId": "C"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Step outcomes",
+      "description": "Skipped is not failed: a skipped step is one whose dependency did not succeed, which is the SKIP policy working rather than an error.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        { "expr": "sum(rate(skein_steps_succeeded_total[1m]))", "legendFormat": "succeeded", "refId": "A" },
+        { "expr": "sum(rate(skein_steps_failed_total[1m])) by (code)", "legendFormat": "failed {{code}}", "refId": "B" },
+        { "expr": "sum(rate(skein_steps_cancelled_total[1m]))", "legendFormat": "cancelled", "refId": "C" },
+        { "expr": "sum(rate(skein_steps_skipped_total[1m]))", "legendFormat": "skipped", "refId": "D" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "state-timeline",
+      "title": "Circuit breaker state by tool",
+      "description": "0 closed, 1 half-open, 2 open. A tool oscillating between open and half-open is failing its probes.",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 16 },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 2,
+          "mappings": [
+            { "type": "value", "options": {
+              "0": { "text": "closed", "color": "green", "index": 0 },
+              "1": { "text": "half-open", "color": "orange", "index": 1 },
+              "2": { "text": "open", "color": "red", "index": 2 }
+            } }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        { "expr": "skein_breaker_state", "legendFormat": "{{tool}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Retries and cancellations",
+      "description": "A rising retry rate with a flat failure rate means transient faults are being absorbed. Both rising means they are not.",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        { "expr": "sum(rate(skein_retries_total[1m])) by (tool)", "legendFormat": "retries {{tool}}", "refId": "A" },
+        { "expr": "sum(rate(skein_runs_cancelled_total[1m]))", "legendFormat": "runs cancelled", "refId": "B" },
+        { "expr": "sum(rate(skein_breaker_rejections_total[1m])) by (tool)", "legendFormat": "breaker rejects {{tool}}", "refId": "C" }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Budget guard trips",
+      "description": "Each trip is a run terminated for exceeding steps, duration, tool calls or tokens.",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 22 },
+      "options": { "colorMode": "value", "graphMode": "area" },
+      "targets": [
+        { "expr": "sum(increase(skein_budget_trips_total[15m])) by (guard)", "legendFormat": "{{guard}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Invariant violations",
+      "description": "Anything above zero is a defect, not a threshold to tune. These are the same properties the test suite asserts.",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 22 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": { "colorMode": "background" },
+      "targets": [
+        { "expr": "skein_invariant_violations", "legendFormat": "{{invariant}}", "refId": "A" },
+        { "expr": "skein_leaked_tasks", "legendFormat": "leaked tasks", "refId": "B" }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Validation rejections by rule",
+      "description": "Which rule is firing matters more than the total: a spike in one rule usually means a client shipped a bad workflow template.",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 22 },
+      "targets": [
+        { "expr": "sum(rate(skein_validation_rejections_total[5m])) by (code)", "legendFormat": "{{code}}", "refId": "A" }
+      ]
+    }
+  ]
+}

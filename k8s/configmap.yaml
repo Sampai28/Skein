@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: skein-config
+  labels:
+    app.kubernetes.io/name: skein
+data:
+  SKEIN_GLOBAL_CONCURRENCY: "64"
+  SKEIN_TOOL_CONCURRENCY: "8"
+  SKEIN_QUEUE_SIZE: "128"
+  SKEIN_WORKERS: "8"
+  SKEIN_OVERFLOW_POLICY: "reject"
+
+  # Must stay below terminationGracePeriodSeconds in the Deployment, with room
+  # for the preStop sleep. The arithmetic is spelled out there.
+  SKEIN_DRAIN_TIMEOUT_S: "25"
+  SKEIN_CANCEL_TIMEOUT_S: "5"
+
+  SKEIN_OLLAMA_URL: "http://ollama:11434"
+  SKEIN_OLLAMA_MODEL: "llama3.2:3b"
+  SKEIN_LLM_TIMEOUT_S: "120"
+
+  SKEIN_TRACE_DIR: "/app/traces"
+  SKEIN_TRACE_TO_DISK: "true"
+  SKEIN_MAX_COMPLETED_RUNS: "500"
+
+  SKEIN_TRACING_ENABLED: "true"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger-collector:4317"
+
+  SKEIN_BREAKER_FAILURE_RATE: "0.5"
+  SKEIN_BREAKER_WINDOW_S: "30"
+  SKEIN_BREAKER_MIN_SAMPLES: "10"
+  SKEIN_BREAKER_OPEN_S: "15"

@@ -1,0 +1,16 @@
+global:
+  # 5s rather than the 15s default. Workflow runs here are seconds long, and a
+  # 15s scrape would miss the concurrency and queue-depth transients entirely —
+  # the gauges would only ever be sampled at rest.
+  scrape_interval: 5s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: skein
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["skein:8000"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
