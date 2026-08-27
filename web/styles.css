@@ -1,0 +1,148 @@
+:root {
+  --bg: #0e1014;
+  --surface: #171a20;
+  --surface-2: #1e222a;
+  --border: #2a2f39;
+  --text: #e6e8ec;
+  --muted: #8b93a3;
+  --accent: #5b9dff;
+  --pending: #6b7280;
+  --running: #5b9dff;
+  --succeeded: #3fb27f;
+  --failed: #f0616d;
+  --cancelled: #e0a63c;
+  --skipped: #7c6ea8;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+header {
+  padding: 24px 28px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+header h1 { margin: 0 0 12px; font-size: 22px; letter-spacing: -0.01em; }
+
+#lookup { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+#run-id {
+  flex: 1 1 340px;
+  padding: 9px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+#run-id:focus { outline: none; border-color: var(--accent); }
+
+button {
+  padding: 9px 15px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: var(--accent);
+  color: #0b0d12;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+button.danger { background: transparent; border-color: var(--failed); color: var(--failed); }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button:not(:disabled):hover { filter: brightness(1.12); }
+
+.status { margin: 10px 0 0; font-size: 13px; color: var(--muted); min-height: 20px; }
+.status.error { color: var(--failed); }
+.status.ok { color: var(--succeeded); }
+
+main { max-width: 1100px; margin: 0 auto; padding: 22px 28px 60px; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px 20px;
+  margin-bottom: 18px;
+}
+
+.card h2 {
+  margin: 0 0 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.hidden { display: none !important; }
+.muted { color: var(--muted); font-size: 13px; }
+
+.summary-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+
+.pill {
+  padding: 3px 11px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-family: var(--mono);
+}
+
+.pill.succeeded { color: var(--succeeded); border-color: var(--succeeded); }
+.pill.failed { color: var(--failed); border-color: var(--failed); }
+.pill.cancelled { color: var(--cancelled); border-color: var(--cancelled); }
+
+.legend { display: flex; gap: 16px; flex-wrap: wrap; list-style: none; margin: 0; padding: 0; }
+.legend li { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.dot.pending { background: var(--pending); }
+.dot.running { background: var(--running); }
+.dot.succeeded { background: var(--succeeded); }
+.dot.failed { background: var(--failed); }
+.dot.cancelled { background: var(--cancelled); }
+.dot.skipped { background: var(--skipped); }
+
+#graph-wrap { overflow-x: auto; }
+#graph { color: var(--border); display: block; }
+
+.edge { fill: none; stroke: var(--border); stroke-width: 1.5; }
+.edge.branch { stroke-dasharray: 4 3; }
+
+.node rect { fill: var(--surface-2); stroke: var(--pending); stroke-width: 1.5; }
+.node .node-id { fill: var(--text); font-size: 12px; font-weight: 600; font-family: var(--mono); }
+.node .node-sub { fill: var(--muted); font-size: 10px; font-family: var(--mono); }
+
+.node.running rect { stroke: var(--running); }
+.node.succeeded rect { stroke: var(--succeeded); }
+.node.failed rect { stroke: var(--failed); }
+.node.cancelled rect { stroke: var(--cancelled); }
+.node.skipped rect { stroke: var(--skipped); stroke-dasharray: 4 3; }
+
+/* A quiet pulse rather than a spinner: it reads at a glance across a graph of
+   twenty nodes, where twenty spinners would be noise. */
+.node.running rect { animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+.events { max-height: 340px; overflow-y: auto; font-family: var(--mono); font-size: 12px; }
+
+.event { padding: 4px 0; border-bottom: 1px solid var(--border); color: var(--muted); }
+.event:last-child { border-bottom: none; }
+.event.step_succeeded { color: var(--succeeded); }
+.event.step_failed { color: var(--failed); }
+.event.step_cancelled { color: var(--cancelled); }
+.event.step_skipped { color: var(--skipped); }
+.event.step_retry { color: var(--cancelled); }
+.event.run_started, .event.run_finished { color: var(--text); }

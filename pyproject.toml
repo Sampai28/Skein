@@ -1,0 +1,97 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "skein"
+version = "0.1.0"
+description = "An asyncio runtime for executing agent workflows defined as DAGs"
+readme = "README.md"
+license = { text = "MIT" }
+
+# 3.12, not 3.14. asyncio.TaskGroup and asyncio.timeout landed in 3.11, so the
+# runtime itself would be happy on either, but the observability stack is the
+# constraint: OpenTelemetry's instrumentation packages and grpcio wheels lag new
+# interpreter releases by months. Containers pin 3.12; see docs/notes.md.
+requires-python = ">=3.12,<3.13"
+
+dependencies = [
+    "pydantic==2.9.2",
+    "fastapi==0.115.4",
+    "uvicorn[standard]==0.32.0",
+    # httpx rather than aiohttp: the demo fetch tool and the Ollama adapter both
+    # need an async client, and httpx's timeout model maps cleanly onto the
+    # per-step deadlines the scheduler already enforces.
+    "httpx==0.27.2",
+    "pyyaml==6.0.2",
+    "prometheus-client==0.21.0",
+    "opentelemetry-api==1.28.1",
+    "opentelemetry-sdk==1.28.1",
+    "opentelemetry-exporter-otlp-proto-grpc==1.28.1",
+    "opentelemetry-instrumentation-fastapi==0.49b1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.3",
+    "pytest-asyncio==0.24.0",
+    "pytest-cov==5.0.0",
+    "hypothesis==6.115.5",
+    "ruff==0.7.2",
+    "mypy==1.13.0",
+    "types-pyyaml==6.0.12.20240917",
+]
+
+[project.scripts]
+skein = "skein.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/skein"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+
+# asyncio_mode = "auto" means an `async def test_` needs no decorator. The
+# alternative ("strict") requires @pytest.mark.asyncio on every async test, and
+# forgetting it does not error — pytest silently reports the coroutine as passed
+# without ever awaiting it. Auto mode removes that failure entirely.
+asyncio_mode = "auto"
+
+# Every test gets a fresh event loop. Sharing one across tests lets a leaked
+# task from an earlier test surface as an unexplained failure in a later one,
+# which is exactly the bug class this project's tests exist to catch.
+asyncio_default_fixture_loop_scope = "function"
+
+markers = [
+    "slow: tests that use real time rather than the virtual clock",
+]
+filterwarnings = [
+    "error::RuntimeWarning",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "ASYNC", "RUF"]
+ignore = [
+    # Asserts in tests are the point.
+    "S101",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Hypothesis strategies legitimately shadow builtins and use loops that ruff
+# would rather see as comprehensions.
+"tests/test_properties.py" = ["C4"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src/skein"]
+strict = true
+# The OTel and prometheus_client packages ship partial or absent stubs; without
+# this, strict mode fails on their imports rather than on our code.
+ignore_missing_imports = true
+warn_unused_ignores = false

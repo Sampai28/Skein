@@ -1,0 +1,79 @@
+# A worked example.
+#
+#   plan ──> search ──┬─> score (map, fans out per document) ──> combine ──> answer
+#                     └─> arithmetic ───────────────────────────┘
+#
+# `arithmetic` depends only on `search`, so it runs concurrently with the whole
+# `score` fan-out rather than queueing behind it. That is the property the
+# scheduler exists to provide: eligibility is per step, not per graph level.
+
+name: research
+version: "1"
+
+max_concurrency: 6
+retry_budget: 10
+
+budget:
+  max_steps: 40
+  max_duration_s: 180
+  max_tool_calls: 60
+  max_tokens: 50000
+
+defaults_timeout_s: 30
+on_step_failure: skip
+
+steps:
+  - id: plan
+    kind: llm_call
+    prompt: |
+      Rewrite this question as a short search query. Answer with the query only.
+      Question: ${inputs.question}
+    timeout_s: 60
+
+  - id: search
+    kind: tool_call
+    tool: retrieval
+    depends_on: [plan]
+    inputs:
+      query: ${steps.plan.output.text}
+      k: 3
+
+  # A map step applies `tool` once per element of `over`. Inside its inputs,
+  # ${item...} refers to the element — here, each retrieved document — and the
+  # fan-out is capped by max_fanout regardless of how long the list turns out
+  # to be.
+  - id: score
+    kind: map
+    tool: calculator
+    depends_on: [search]
+    over: ${steps.search.output.documents}
+    max_fanout: 8
+    inputs:
+      expression: "${item.score} * 100"
+    timeout_s: 15
+
+  - id: arithmetic
+    kind: tool_call
+    tool: calculator
+    depends_on: [search]
+    inputs:
+      expression: "42 * (7 + 3)"
+    retry:
+      max_attempts: 2
+      initial_backoff_s: 0.2
+
+  - id: combine
+    kind: reduce
+    reducer: concat
+    depends_on: [score, arithmetic]
+    inputs:
+      values: ${steps.score.output.items}
+
+  - id: answer
+    kind: llm_call
+    depends_on: [combine, plan]
+    prompt: |
+      Using these notes, answer the question in two sentences.
+      Question: ${inputs.question}
+      Notes: ${steps.combine.output.result}
+    timeout_s: 90
