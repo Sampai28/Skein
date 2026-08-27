@@ -202,13 +202,3 @@ failed, but the coroutine lives until the process ends.
 
 More detail in [docs/design-notes.md](docs/design-notes.md), and the things most
 likely to need attention on a first run are in [docs/notes.md](docs/notes.md).
-
-## Resume bullets
-
-- Built an asyncio DAG runtime for agent workflows sustaining `<CONCURRENT_WORKFLOWS>` concurrent workflows and `<CONCURRENT_STEPS>` in-flight steps with `<LEAKED_TASKS>` leaked tasks across `<CANCELLATION_COUNT>` mid-flight cancellations.
-
-- Implemented structured concurrency with `asyncio.TaskGroup`, per-step and per-workflow timeouts, and a cancellation contract verified by tests asserting `<LEAKED_TASKS>` residual tasks in `asyncio.all_tasks()` after `<CANCELLED_RUNS>` cancelled runs.
-
-- Added per-tool circuit breakers, jittered retry with a per-run budget, and a bounded ingress queue, cutting cascading failures from `<BASELINE_FAILURE_RATE>` to `<GUARDED_FAILURE_RATE>` under `<INJECTED_FAULT_RATE>` injected tool faults.
-
-- Built deterministic record-and-replay with trajectory hashing, reproducing `<REPLAYED_RUNS>` recorded runs with `<HASH_MISMATCHES>` trajectory mismatches.
